@@ -1,0 +1,351 @@
+#include <reg51.h>
+#include <intrins.h>
+#include <stdio.h>
+#include "LCM16X2P.H"
+#define LCM_DB P2
+#define OSC 11059200
+#define uchar unsigned char
+
+sbit LCM_RS = P1^0; //1602的数据/指令选择控制线 
+sbit LCM_RW = P1^1;	//1602的读写控制线 
+sbit LCM_E = P1^2;  //1602的使能控制线
+sbit LCM_BLC = P1^3;
+
+sbit PRESS1 = P0^0;	//设置按键
+sbit PRESS2 = P0^1;
+sbit PRESS3 = P0^2;
+sbit PRESS4 = P0^3;
+sbit D1=P0^7;
+sbit D2=P0^6;
+sbit D3=P0^5;
+sbit D4=P0^4;
+
+void pre();
+void write_com(uchar com);
+void write_data(uchar date);
+void  displaypage1();
+void  displaypage2();
+void  displaypage3();
+void  displaypage4();
+
+unsigned int data DelayConst = 140; //设定延时
+unsigned char ucTH,ucTL,Ticks,num;
+
+uchar code table1 [] = {0x04,0x1F,0x0A,0x1F,0x14,0x1A,0x15,0x12};
+uchar code table2 [] = {0x00,0x1F,0x04,0x1F,0x15,0x15,0x0A,0X11};
+uchar code table3 [] = {0x04,0X15,0X0E,0x1F,0x04,0x0D,0x0E,0x14};
+uchar code table4 [] = {0x1F,0x15,0x1F,0x0C,0x1F,0x04,0x1F,0x04};
+unsigned char code CharCode[] = 
+{
+	0xc0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,
+	0x80,0x90,0x88,0x83,0xC6,0xA1,0x86,0x8E
+};	//添加功能；用数码管显示第几个按键按下
+
+void main(void) //主函数
+{
+	int page = 0;
+	int ispress = 0;
+	int count = 0;
+	P3 =0xff;
+	EA=0;//停止所有中断
+	Ticks=0;
+	ucTH=(65536-OSC/12/20)/256;	 //计算50ms的定时的时间常数
+	ucTL=(65536-OSC/12/20)%256;
+	TMOD=0x01;  //T0：模式1，16位定时器
+	TH0=ucTH;
+	TL0=ucTL;
+	ET0=1;  //T0允许中断
+	TR0=1;  //启动定时器
+	EA=1;  //打开总中断允许
+	LCMInit();  //初始化LCM
+	LCMClear();	//清屏
+	//displaypage1();
+	while(1)  //判断按键是否按下
+	{
+		if(!PRESS1)
+		    page = 0;
+			count++;
+		if(!PRESS2)
+			page = 1;
+			count++;
+		if(!PRESS3)
+			page = 2;
+			count++;
+			
+		if(!PRESS4)
+			page = 3;
+			count++;
+		if(count)
+		{
+			ispress = 1;
+			count = 0;
+		}
+		else
+		{
+			ispress = 0;
+		}
+		if(ispress)
+		{
+			switch(page)
+			{
+	         case 0: D1=0;D2=1; D3=1;D4=1;	displaypage1();     //page=0,执行displaypage1函数
+			 break;
+			 case 1: D1=1;D2=0; D3=1;D4=1;	displaypage2();
+//page=1,执行displaypage2函数
+			 break;
+			 case 2: D1=1;D2=1; D3=0;D4=1;	displaypage3();
+//page=2,执行displaypage3函数
+			 break;
+			 case 3: D1=1;D2=1; D3=1;D4=0;  displaypage4();
+//page=4,执行displaypage4函数
+			break;
+			default: break;
+			}
+		}
+		 
+		 P3 = CharCode[page+1];
+		 LCMDelay(3000);
+	}
+
+}
+
+void displaypage1() //displaypage1函数,显示hello guys
+{
+	LCMClear();
+	LCMDisplayString(0,0," hello ! :) ");
+	LCMDisplayString(1,0,"           ");
+	
+}
+void displaypage2()  //displaypage2函数，显示名字
+{
+	LCMClear();
+
+	LCMDisplayString(0,0,"He Guanpeng");
+	LCMDisplayString(1,0,"This is my name.");
+	LCMDelay(100000);
+	LCMDelay(100000);
+	
+}
+void displaypage3() //displaypage3函数,显示学号
+{	  
+	LCMClear();
+	LCMDisplayString(0,0,"My number is:");
+	LCMDisplayString(1,0,"208120710");	 
+}
+
+void displaypage4( ) //displaypage4函数，显示全部
+{
+	LCMClear();
+	LCMDisplayString(0,0," hello !:) ");
+	LCMDisplayString(1,0,"           ");
+	LCMDelay(100000);
+	LCMDelay(100000);		
+	LCMDelay(100000);
+	LCMDelay(100000);
+	LCMClear();
+
+	LCMDisplayString(0,0,"He Guanpeng");
+	LCMDisplayString(1,0,"This is my name.");
+	LCMDelay(100000);
+	LCMDelay(100000);
+	LCMDelay(100000);
+	LCMDelay(100000);		
+	LCMClear();
+	LCMDisplayString(0,0,"My number is:");
+	LCMDisplayString(1,0,"208120710");
+	LCMDelay(100000);
+	LCMDelay(100000);
+	LCMDelay(100000);
+	LCMDelay(100000);
+	LCMClear();
+}
+
+	void write_com(uchar com) //写字符
+{
+	LCM_RS=0;
+	P2=com;
+	LCMDelay(5);
+	LCM_E=1;
+	LCMDelay(5);
+	LCM_E=0;
+}
+
+void write_data(uchar date) //写数据
+{
+	LCM_RS=1;
+	P2=date;
+	LCMDelay(5);
+	LCM_E=1;
+	LCMDelay(5);
+	LCM_E=0;
+}
+
+void LCMDelay(int ms)	 //通过循环的方式延时
+{
+	unsigned int i,cnt;
+	cnt = DelayConst * ms;
+	for(i=0;i<cnt;i++);
+}
+
+unsigned char LCMReadState(void) //查询LCN的忙标志/当前AC的地址
+{
+	unsigned char state;
+	LCM_E = 0;
+	LCM_RS = 0;
+	LCM_RW = 1;
+	LCM_E = 1;
+	_nop_();
+	_nop_();
+	state = LCM_DB;
+	LCM_E = 0;
+	return state;
+}
+
+void LCMClear(void)	//清屏
+{
+	LCMDelay(1);
+	LCM_E = 0;
+	LCM_RS = 0;
+	LCM_RW = 0;
+	LCM_DB = 0x01;
+	LCM_E = 1;
+	_nop_();
+	_nop_();
+	LCM_E = 0;
+	LCMDelay(1);
+}
+
+void LCMWriteCmd(unsigned char cmd) //向LCM写入控制字
+{
+	LCMDelay(1);
+	LCM_E = 0;
+	LCM_RS = 0;
+	LCM_RW = 0;
+	LCM_DB = cmd;
+	LCM_E = 1;
+	_nop_();
+	_nop_();
+	LCM_E = 0;
+}
+
+void LCMWriteData(unsigned char dc)	 //向LCM写入数据
+{	
+	while(LCMReadState() & BUSYFLAG);
+	LCM_RS = 1;
+	LCM_RW = 0;
+	LCM_DB = dc;
+	LCM_E = 1;
+	_nop_();
+	_nop_();
+	LCM_E = 0;
+}
+
+void LCMInit(void) //初始化LCM
+{
+	LCMDelay(60);
+	 LCM_BLC = 0;
+	LCMWriteCmd(0x38);
+	LCMDelay(5);
+	LCMWriteCmd(0x38);
+	LCMDelay(1);
+	LCMWriteCmd(0x38);
+	while(LCMReadState() & BUSYFLAG);
+	LCMWriteCmd(0x08);
+	while(LCMReadState() & BUSYFLAG);
+	LCMWriteCmd(0x01);
+	while(LCMReadState() & BUSYFLAG);
+	LCMWriteCmd(0x06);
+	while(LCMReadState() & BUSYFLAG);
+	LCMWriteCmd(0x0e);
+	while(LCMReadState() & BUSYFLAG);
+	pre();
+}
+
+void LCMGOtoXY(unsigned char x,unsigned char y)	//移动光标到X行，Y列
+{
+	unsigned char cmd;
+	if(x==0)
+	{
+		cmd=0x80|y;
+	}
+	else
+	{
+		cmd=0x80|0x40|y;
+	}
+	LCMWriteCmd(cmd);
+	while(LCMReadState()&BUSYFLAG);
+}
+
+void LCMDisplayChar(unsigned char x,unsigned char y,unsigned char ch) 
+//在指定的位置显示一个字符
+{
+	LCMGotoXY(x,y);
+	LCMWriteData(ch);
+}
+
+void LCMDisplayString(unsigned char x,unsigned char y,unsigned char * str)
+{	
+	unsigned char ptr;
+	ptr = 0;
+	while(*(str+ptr) != 0)
+	{	
+		LCMDisplayChar(x,(y+ptr),*(str+ptr));
+		ptr++;
+		LCMDelay(1000);
+	}
+}
+
+void LCMBlink(unsigned char x,unsigned char y,unsigned char cmd) 
+//将指定位置显示的字符闪烁（同时关闭光标）
+{	
+	LCMGotoXY(x,y);
+	if(cmd == BLINK)
+	{
+		LCMWriteCmd(0x0d);
+	}
+	else
+	{	
+		LCMWriteCmd(0x0c);
+	}
+}
+
+
+void TOISR(void)interrupt 1	 //中断
+{
+	TH0=ucTH;
+	TL0=ucTL;
+	TR0=1;
+}
+
+void pre() //显示中文
+{
+	uchar i;
+	write_com(0x40);
+	for(i=0;i<8;i++)
+	{	
+		write_data(table1[i]);
+	}
+	write_com(0x48);
+	for(i=0;i<8;i++)
+	{
+		write_data(table2[i]);
+	}
+	write_com(0x48+0x08);
+	for(i=0;i<8;i++)
+	{	
+		write_data(table3[i]);
+	}
+	write_com(0x48+0x08+0x08);
+	for(i=0;i<8;i++)
+	{	
+		write_data(table4[i]);
+	}
+}
+
+
+
+
+
+
+
+
